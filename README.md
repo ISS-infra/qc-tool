@@ -19,7 +19,7 @@ This guide will help you set up and run the QC (Quality Control) tools.
 3. Run the installation script to set up the environment and install dependencies:
 
     ```bash
-    ./install.sh
+    install.bat
     ```
 
 ## Configuration
