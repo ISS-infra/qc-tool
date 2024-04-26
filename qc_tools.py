@@ -25,39 +25,6 @@ proj = ""
 interval = 25 
 device = ""
 
-# List of required libraries with their versions
-required_libraries = {
-    'pandas': '==1.4.4',
-    'pandasql': '==0.7.3',
-    'sqlalchemy': '==1.4.46',
-    'pyodbc': '==5.1.0',
-    'psycopg2': None,  # No specific version specified
-    'python-dotenv': None
-}
-
-def check_python_version():
-    # Check if Python 3.9 is installed
-    if sys.version_info.major != 3 or sys.version_info.minor != 9:
-        print("Python 3.9 is required to run this script.")
-        return False
-    return True
-
-def check_dependencies():
-    # Check if all required libraries are installed
-    for lib, version in required_libraries.items():
-        try:
-            __import__(lib)
-        except ImportError:
-            #print(f"Installing {lib}...")
-            install_library(lib, version)
-
-def install_library(library, version=None):
-    # Install a library using pip
-    pip_command = [sys.executable, '-m', 'pip', 'install', library]
-    if version:
-        pip_command.append(version)
-    subprocess.run(pip_command, check=True)
-
 def browse_folder():
     global source_folder 
     folder_path = filedialog.askdirectory()
@@ -1885,11 +1852,6 @@ def main(date_survey, path_direc, path_out, user, password, host, port, database
         print(f" \u26A0 Error occurred in main function: {str(e)}")
 
 def iterate_folders(path_file):
-    # Check dependencies
-    check_dependencies()
-
-    # Now that all dependencies are installed, you can run your main code here
-    #print("All dependencies are installed. Running main code...\n")
     try:
         # Check if the source folder exists
         if not os.path.exists(path_file):
