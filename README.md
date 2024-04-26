@@ -5,6 +5,14 @@
 1. Create a `.env` file in the root directory of the project.
 2. Add the following environment variables to the `.env` file:
 
+    ```
+    HOST=localhost
+    PORT=5432
+    DATABASE=my_database
+    USER=my_username
+    PASSWORD=my_password
+    ```
+
 Replace the values with your own connection details.
 
 ## Adding Database Functions
