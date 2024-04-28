@@ -1299,7 +1299,7 @@ def create_survey_local(conPG, s_id, device, proj, interval):
                 null::int as road_id,
                 chainage_str,
                 chainage_end,
-                file_name
+                file_name, section_id::int
             from
                 (select -- generate เส้น survey ด้วย ST_MakeLine
                     min(chainage) as chainage_str, max(chainage) as chainage_end, link_id, section_id,
