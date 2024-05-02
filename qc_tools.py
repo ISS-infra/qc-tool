@@ -16,6 +16,10 @@ from sqlalchemy.types import TEXT
 import os
 from pathlib import Path
 from urllib.parse import quote_plus
+import matplotlib.pyplot as plt
+import mplcursors
+from matplotlib.widgets import CheckButtons
+import requests
 
 # Load environment variables from .env file
 load_dotenv()
@@ -24,6 +28,15 @@ source_folder = ""
 proj = ""  
 interval = 25 
 device = ""
+database = proj.lower()
+
+def query_table(sql_query, conPG):
+    cursor = conPG.cursor()
+    cursor.execute(sql_query)
+    rows = cursor.fetchall()
+    cursor.close()
+    #conPG.close()
+    return rows
 
 def browse_folder():
     global source_folder 
@@ -31,18 +44,22 @@ def browse_folder():
     file_path_entry.delete(0, tk.END)
     file_path_entry.insert(0, folder_path)
     source_folder = folder_path 
+    print("source_folder:", source_folder) 
 
 def set_project_name(event=None):
     global proj
-    proj = project_name_entry.get().upper()
+    proj = project_name_var.get().upper()
+    print("Project Name:", proj) 
 
 def set_interval(event=None):
     global interval
     interval = interval_var.get()
+    print("Interval:", interval) 
 
 def set_device(event=None):
     global device
-    device = device_var.get()
+    device = device_var.get().lower()
+    print("Device Name:", device.upper()) 
 
 def extract_survey_data_tpl(file_dir, path_out, date_survey):
     try:
@@ -87,42 +104,69 @@ def extract_survey_data_tpl(file_dir, path_out, date_survey):
             access_valuelaser = access_valuelaser.append(pd.read_sql_query(cre_valuelaser, conn), ignore_index=True)
 
             # Fetching Data for access_key
-            cre_key = '''SELECT CHAINAGE_START AS event_str, CHAINAGE_END AS event_end, 
-                                EVENT AS event_num,SWITCH_GROUP AS event_type,  
-                                EVENT_DESC as  event_name,
-                                link_id, section_id, km_start, km_end, length,lane_no, 
-                                survey_date,LATITUDE_START AS lat_str, LATITUDE_END AS lat_end, 
-                                LONGITUDE_START AS lon_str,LONGITUDE_END AS lon_end, '%s' AS name_key,
-                                Val(Mid('%s', InStr('%s', '_') + 1)) AS run_code
-                            FROM KeyCode_Raw_%s
-                            WHERE link_id <> '' ''' % (a,a,a,a)
+            cre_key = '''
+                SELECT 
+                    CHAINAGE_START AS event_str, 
+                    CHAINAGE_END AS event_end, 
+                    EVENT AS event_num,
+                    SWITCH_GROUP AS event_type,  
+                    EVENT_DESC AS event_name,
+                    link_id, 
+                    section_id, 
+                    km_start, 
+                    km_end, 
+                    length,
+                    lane_no, 
+                    survey_date,
+                    LATITUDE_START AS lat_str, 
+                    LATITUDE_END AS lat_end, 
+                    LONGITUDE_START AS lon_str,
+                    LONGITUDE_END AS lon_end, 
+                    '%s' AS name_key,
+                    Val(Mid('%s', InStr('%s', '_') + 1)) AS run_code
+                FROM 
+                    KeyCode_Raw_%s
+                WHERE 
+                    link_id <> ''
+                ''' % (a,a,a,a)
             access_key = access_key.append(pd.read_sql_query(cre_key, conn), ignore_index=True)
 
             # Fetching Data for access_pave
-            cre_pave = '''SELECT
-                            INT(CHAINAGE) as chainage_pic, 
-                            FRAME+1 as  frame_number ,b.EVENT_DESC as event_name,
-                            '%s' as name_key,Val(Mid('%s', InStr('%s', '_') + 1)) AS run_code
-                        from Video_Processed_%s_2 as a
-                        Left join KeyCode_Raw_%s as b on a.CHAINAGE >= INT(b.CHAINAGE_START) AND a.CHAINAGE < INT(b.CHAINAGE_END)
-                        WHERE b.EVENT_DESC is not null''' % (a,a,a,a,a)
+            cre_pave = '''
+                SELECT 
+                    INT(CHAINAGE) AS chainage_pic, 
+                    FRAME + 1 AS frame_number, 
+                    b.EVENT_DESC AS event_name,
+                    '%s' AS name_key,
+                    Val(Mid('%s', InStr('%s', '_') + 1)) AS run_code
+                FROM 
+                    Video_Processed_%s_2 AS a
+                LEFT JOIN 
+                    KeyCode_Raw_%s AS b ON a.CHAINAGE >= INT(b.CHAINAGE_START) AND a.CHAINAGE < INT(b.CHAINAGE_END)
+                WHERE 
+                    b.EVENT_DESC IS NOT NULL
+                ''' % (a,a,a,a,a)
             access_distress_pic = access_distress_pic.append(pd.read_sql_query(cre_pave, conn), ignore_index=True)
 
+            if graph_var.get():
+                print(f'Processing on: {base}\n \u2713 ตรวจสอบค่า MAX, MIN, MEAN ของ IRI, RUT, TEXTURE จากกราฟ ว่าผิดปกติหรือไม่ ?' )
+                plot_and_show_statistics(access_valuelaser, base, proj, device)
+                print('____________________________________________________________________________________________________________________________________________')
 
-            valuelaser_file = rf"{path_out}\access_valuelaser.csv"
-            key_file = rf"{path_out}\access_key.csv"
-            distress_pic_file = rf"{path_out}\access_distress_pic.csv"
-                
-            access_valuelaser.to_csv(valuelaser_file, index=False)
-            access_key.to_csv(key_file, index=False)
-            access_distress_pic.to_csv(distress_pic_file, index=False)
+        valuelaser_file = rf"{path_out}\access_valuelaser.csv"
+        key_file = rf"{path_out}\access_key.csv"
+        distress_pic_file = rf"{path_out}\access_distress_pic.csv"
 
-            print(f" \u2713 Survey data processing completed. Files generated: \n \u2713 {valuelaser_file}\n \u2713 {key_file}\n \u2713 {distress_pic_file}\n")
+        access_valuelaser.to_csv(valuelaser_file, index=False)
+        access_key.to_csv(key_file, index=False)
+        access_distress_pic.to_csv(distress_pic_file, index=False)
+
+        print(f" \u2713 Survey data processing completed. Files generated: \n \u2713 {valuelaser_file}\n \u2713 {key_file}\n \u2713 {distress_pic_file}\n")
 
         return access_valuelaser, access_key, access_distress_pic
 
     except Exception as e:
-        print(f" \u26A0 Error occurred while processing survey data: {str(e)}")
+        print(f" \U0001F6AB Error occurred while processing survey data: {str(e)}")
 
 def extract_survey_data_lcms(file_dir, path_Data, path_out, date_survey):
     try:
@@ -688,11 +732,16 @@ def extract_survey_data_lcms(file_dir, path_Data, path_out, date_survey):
         
         print(f" \u2713 Survey data processing completed.\n   Files generated: \n   \u2713 {path_out}\\access_valuelaser.csv\n   \u2713 {path_out}\\access_key.csv\n   \u2713 {path_out}\\access_distress_pic.csv\n   \u2713 {path_out}\\access_crack.csv\n   \u2713 {path_out}\\access_pothole.csv\n   \u2713 {path_out}\\access_bleeding.csv\n   \u2713 {path_out}\\access_rav.csv\n")
 
+        if graph_var.get():
+            print(f'Processing on: {base}\n \u2713 ตรวจสอบค่า MAX, MIN, MEAN ของ IRI, RUT, TEXTURE จากกราฟ ว่าผิดปกติหรือไม่ ?' )
+            plot_and_show_statistics(access_valuelaser, base, proj, device)
+            print('____________________________________________________________________________________________________________________________________________')
+
         return access_valuelaser, access_key, access_distress_pic, access_crack, \
             access_pothole, access_bleeding, access_rav
         
     except Exception as e:
-        print(f" \u26A0 Error occurred while processing survey data: {str(e)}")
+        print(f" \U0001F6AB Error occurred while processing survey data: {str(e)}")
 
 def insert_to_postgres(dataframes_tpl, dataframes_lcms, user, password, host, port, database):
     try:
@@ -706,7 +755,6 @@ def insert_to_postgres(dataframes_tpl, dataframes_lcms, user, password, host, po
             f"postgresql://{user}:{encoded_password}@{host}:{port}/{database}"
         )
 
-        #engine = create_engine(f'postgresql://{user}:{password}@{host}:{port}/{database}')
         conPG = engine.connect()
 
         if device.upper() == "TPL":
@@ -734,7 +782,7 @@ def insert_to_postgres(dataframes_tpl, dataframes_lcms, user, password, host, po
         print(" \u2713 Data inserted into PostgreSQL successfully!\n")
 
     except Exception as e:
-        print(f" \u26A0 Error occurred while inserting data into PostgreSQL: {str(e)}")
+        print(f" \U0001F6AB Error occurred while inserting data into PostgreSQL: {str(e)}")
 
 def preprocessing_1(conPG):
     try:
@@ -762,9 +810,9 @@ def preprocessing_1(conPG):
             print('     \u2713 ตรวจสอบเรียบร้อย :: ไม่มี LINK_ID ซ้ำกัน')
             print('____________________________________________________________________________________________________________________________________________')
         else:
-            print(f'     \u26A0 แก้ไข LINK_ID ว่ามีซ้ำกันในวันสำรวจเดียวกันหรือไม่ ก่อนนะจ๊ะ !!! \n{table_check2}')
+            print(f'     \U0001F6AB แก้ไข LINK_ID ว่ามีซ้ำกันในวันสำรวจเดียวกันหรือไม่ ก่อนนะจ๊ะ !!! \n{table_check2}')
             print('____________________________________________________________________________________________________________________________________________')
-            # exit()
+            return
         print('')
 
         # STEP 2: Check for GPS_LOST in KM_START and KM_END columns
@@ -784,9 +832,9 @@ def preprocessing_1(conPG):
             print('     \u2713 ตรวจสอบเรียบร้อย :: ไม่มีค่า GPS_LOST')
             print('____________________________________________________________________________________________________________________________________________')
         else:
-            print(f'     \u26A0 แก้ไข Link_ID ที่ข้อมูล KM_START และ KM_END มีค่า GPS_LOST ก่อนนะจ๊ะ !!! \n{table_check3}')
+            print(f'     \U0001F6AB แก้ไข Link_ID ที่ข้อมูล KM_START และ KM_END มีค่า GPS_LOST ก่อนนะจ๊ะ !!! \n{table_check3}')
             print('____________________________________________________________________________________________________________________________________________')
-            # exit()
+            #return
         print('')
 
         # STEP 3: Check for inconsistencies between link_id, lane_group, and KM_START/KM_END
@@ -816,12 +864,12 @@ def preprocessing_1(conPG):
             print('     \u2713 ตรวจสอบเรียบร้อย :: ไม่มีขา R และขา L ใดขัดกับ km_start และ km_end')
             print('____________________________________________________________________________________________________________________________________________')
         else:
-            print(f'     \u26A0 แก้ไข link_id กรณีขา R และขา L ขัดกับ km_start และ km_end ก่อนนะจ๊ะ !!! \n{table_check4}')
+            print(f'     \U0001F6AB แก้ไข link_id กรณีขา R และขา L ขัดกับ km_start และ km_end ก่อนนะจ๊ะ !!! \n{table_check4}')
             print('____________________________________________________________________________________________________________________________________________')
-            # exit()
+            #return
 
     except psycopg2.Error as e:
-        print(" \u26A0 Error occurred while checking data before processing:", e)
+        print(" \U0001F6AB Error occurred while checking data before processing:", e)
 
 def process_data_and_update(conPG, interval):
     try:    
@@ -1075,7 +1123,8 @@ def process_data_and_update(conPG, interval):
                     group by b.chainage,b.link_id,b.grp1,a.min_c,a.max_c,a.the_geom,a.file_name)foo
                 order by file_name,chainage)foo
             ) b
-            where a.file_name = b.file_name and a.chainage = b.chainage ''' %(interval,interval,interval,interval,interval,interval)
+            where a.file_name = b.file_name and a.chainage = b.chainage 
+            ''' %(interval,interval,interval,interval,interval,interval)
         cur_step66 = conPG.cursor()
         cur_step66.execute(step66)
         conPG.commit()
@@ -1083,30 +1132,59 @@ def process_data_and_update(conPG, interval):
 
         # STEP_4.4: update null iri, rutting, texture, and frame_number
         irmp3 = '''
-            update data_suvey a set iri = b.iri , rutting = b.rutting, texture = b.texture , frame_number = b.frame_number
-            from
-                (select
+            UPDATE data_suvey a 
+            SET 
+                iri = b.iri,
+                rutting = b.rutting,
+                texture = b.texture,
+                frame_number = b.frame_number
+            FROM (
+                SELECT 
                     a.file_name,
                     a.raw_chainage,
-                    avg(b.iri)::real as iri,
-                    avg(b.rutting)::real as rutting,
-                    avg(b.texture)::real as texture,
-                    min(b.frame_number) as frame_number
-                from
-                    (select file_name,link_id,chainage as raw_chainage,(round(chainage/%s)*%s)::real as chainage,  iri,rutting,texture,frame_number
-                    from data_suvey
-                    where iri is null or rutting is null or texture is null or frame_number is null
-                    and split_part((chainage/ CAST(%s AS float))::text, '.', 2) = ''
-                    order by file_name,chainage) a 
-                join 
-                    (select
-                        file_name,link_id,chainage,iri,rutting,texture,frame_number
-                    from data_suvey
-                    ) b
-                on  (((a.chainage-5) = b.chainage) and a.file_name = b.file_name) or (((a.chainage+5) = b.chainage) and a.file_name = b.file_name)
-                where a.file_name = b.file_name
-                group by a.file_name,a.raw_chainage) b
-            where a.file_name = b.file_name and a.chainage = b.raw_chainage
+                    avg(b.iri)::REAL AS iri,
+                    avg(b.rutting)::REAL AS rutting,
+                    avg(b.texture)::REAL AS texture,
+                    min(b.frame_number) AS frame_number
+                FROM (
+                    SELECT 
+                        file_name,
+                        link_id,
+                        chainage AS raw_chainage,
+                        (ROUND(chainage / %s) * %s)::REAL AS chainage,
+                        iri,
+                        rutting,
+                        texture,
+                        frame_number
+                    FROM 
+                        data_suvey
+                    WHERE 
+                        (iri IS NULL OR rutting IS NULL OR texture IS NULL OR frame_number IS NULL)
+                        AND split_part((chainage / CAST(%s AS FLOAT))::TEXT, '.', 2) = ''
+                    ORDER BY 
+                        file_name,
+                        chainage
+                ) a
+                JOIN (
+                    SELECT 
+                        file_name,
+                        link_id,
+                        chainage,
+                        iri,
+                        rutting,
+                        texture,
+                        frame_number
+                    FROM 
+                        data_suvey
+                ) b ON (((a.chainage - 5) = b.chainage AND a.file_name = b.file_name) OR ((a.chainage + 5) = b.chainage AND a.file_name = b.file_name))
+                WHERE 
+                    a.file_name = b.file_name
+                GROUP BY 
+                    a.file_name,
+                    a.raw_chainage
+            ) b
+            WHERE 
+                a.file_name = b.file_name AND a.chainage = b.raw_chainage;
             ''' %(interval,interval,interval)
         cur_step36 = conPG.cursor()
         cur_step36.execute(irmp3)
@@ -1116,7 +1194,7 @@ def process_data_and_update(conPG, interval):
         print('')
 
     except Exception as e:
-        print(f" \u26A0 An error occurred: {str(e)}")
+        print(f" \U0001F6AB An error occurred: {str(e)}")
 
 def preprocessing_2(conPG, interval):
     try:
@@ -1124,11 +1202,23 @@ def preprocessing_2(conPG, interval):
         
         # STEP 4.5: Check iri, rut, mpd, and pic
         irmp = '''
-        select file_name,link_id,chainage,iri,rutting,texture,frame_number
-            from data_suvey
-            where iri is null or rutting is null or texture is null or frame_number is null
-            and split_part((chainage/ CAST(%s AS float))::text, '.', 2) = ''
-            order by file_name,chainage''' % (interval)
+            SELECT 
+                file_name,
+                link_id,
+                chainage,
+                iri,
+                rutting,
+                texture,
+                frame_number
+            FROM 
+                data_suvey
+            WHERE 
+                iri IS NULL OR rutting IS NULL OR texture IS NULL OR frame_number IS NULL
+                AND split_part((chainage / CAST(%s AS float))::TEXT, '.', 2) = ''
+            ORDER BY 
+                file_name,
+                chainage
+            ''' % (interval)
         cur_step34 = conPG.cursor()
         cur_step34.execute(irmp)
         conPG.commit()
@@ -1140,35 +1230,43 @@ def preprocessing_2(conPG, interval):
             print('     \u2713 ตรวจสอบเรียบร้อย :: ไม่มีค่า iri, rut, mpd และ pic ที่ผิดปกติ')
             print('____________________________________________________________________________________________________________________________________________')
         elif my_table3.empty == False:
-            print(f'     \u26A0 แก้ไขค่า : iri rut mpd and pic ว่าผิดปกติหรือไม่ ? \n{my_table3}')
+            print(f'     \U0001F6AB แก้ไขค่า : iri rut mpd and pic ว่าผิดปกติหรือไม่ ? \n{my_table3}')
             print('____________________________________________________________________________________________________________________________________________')
-            # exit()
+            #return
         print('')
 
         # STEP 4.6: Check for negative KM
         irmp1 = '''
-            select *
-            from
-                (select 
-                    link_id,survey_code,
-                    case when length_chainage > length_km then 'length_chainage มากกว่า'
-                            when length_chainage < length_km then 'length_chainage น้อยกว่า' end as status,
-                    count(*)  as "count_ch_p",
-                    count(*) * 5 as "count_ch_p*5",
-                    length_chainage as "length_chainage",
-                    length_km as "length_km"
-                from
-                    (select 	
-                        link_id,file_name as survey_code,event_str , event_end ,
-                        abs(event_str-event_end) as length_chainage,
+            SELECT *
+            FROM (
+                SELECT 
+                    link_id,
+                    survey_code,
+                    CASE 
+                        WHEN length_chainage > length_km THEN 'length_chainage มากกว่า'
+                        WHEN length_chainage < length_km THEN 'length_chainage น้อยกว่า'
+                    END AS status,
+                    COUNT(*) AS count_ch_p,
+                    COUNT(*) * 5 AS count_ch_p_times_5,
+                    length_chainage AS length_chainage,
+                    length_km AS length_km
+                FROM (
+                    SELECT 	
+                        link_id,
+                        file_name AS survey_code,
+                        event_str,
+                        event_end,
+                        ABS(event_str - event_end) AS length_chainage,
                         km_start,
                         km_end,
-                        abs(km_start-km_end) as length_km
-                    from   data_suvey
-                    where link_id not like '%construction%') foo
-                group by link_id,survey_code,length_chainage,length_km
-                order by survey_code,link_id) foo
-            where status is not null
+                        ABS(km_start - km_end) AS length_km
+                    FROM data_suvey
+                    WHERE link_id NOT LIKE '%construction%'
+                ) AS foo
+                GROUP BY link_id, survey_code, length_chainage, length_km
+                ORDER BY survey_code, link_id
+            ) AS bar
+            WHERE status IS NOT NULL
             '''
         cur_step35 = conPG.cursor()
         cur_step35.execute(irmp)
@@ -1183,7 +1281,7 @@ def preprocessing_2(conPG, interval):
         elif my_table4.empty == False:
             print(f'     \u26A0 ตรวจสอบพบค่า KM ติดลบ ด้วยการสังเกตุ length_chainage และ length_km \n{my_table4}')
             print('____________________________________________________________________________________________________________________________________________')
-            # exit()
+            # return
         print('')
 
         # STEP 4.8: Check link_id and lane_no consistency
@@ -1215,9 +1313,9 @@ def preprocessing_2(conPG, interval):
             print('     \u2713 ตรวจสอบเรียบร้อย :: ไม่มี link_id กรณี เลน ขัดกับ lane_no')
             print('____________________________________________________________________________________________________________________________________________')
         elif table_check8.empty == False:
-            print(f'     \u26A0 ตรวจสอบ link_id กรณี เลน ขัดกับ lane_no ไฟล์นั้น ๆ ก่อนนะจ๊ะ !!! \n{table_check8}')
+            print(f'     \U0001F6AB ตรวจสอบ link_id กรณี เลน ขัดกับ lane_no ไฟล์นั้น ๆ ก่อนนะจ๊ะ !!! \n{table_check8}')
             print('____________________________________________________________________________________________________________________________________________')
-            # exit()
+            #return
         print('')
 
         # STEP 4.9: Check link_id and event consistency
@@ -1253,13 +1351,91 @@ def preprocessing_2(conPG, interval):
             print('     \u2713 ตรวจสอบเรียบร้อย :: ไม่มี link_id ที่ ผิว ขัดกับ EVENT และ EVENT_DESC')
             print('____________________________________________________________________________________________________________________________________________')
         elif table_check9.empty == False:
-            print(f'     \u26A0 ตรวจสอบพบ link_id กรณี ผิว ขัดกับ EVENT และ EVENT_DESC ไฟล์นั้น ๆ ก่อนนะจ๊ะ !!! \n{table_check9}')
+            print(f'     \U0001F6AB ตรวจสอบพบ link_id กรณี ผิว ขัดกับ EVENT และ EVENT_DESC ไฟล์นั้น ๆ ก่อนนะจ๊ะ !!! \n{table_check9}')
             print('____________________________________________________________________________________________________________________________________________')
-            # exit()
+            #return
         print('')
 
     except Exception as e:
-        print(f" \u26A0 An error occurred: {str(e)}")
+        print(f" \U0001F6AB An error occurred: {str(e)}")
+
+def plot_and_show_statistics(data, base, proj, device):
+    data = data.sort_values(by='chainage')
+    
+    # Create a figure with two subplots: one for the main plot and one for the statistics table
+    fig, (ax_main, ax_stats) = plt.subplots(nrows=2, figsize=(10, 7), gridspec_kw={'height_ratios': [4, 1]})
+    
+    # Plot the data on the main subplot
+    line_iri, = ax_main.plot(data['chainage'], data['iri'], label='IRI')
+    line_rutting, = ax_main.plot(data['chainage'], data['rutting'], label='Rutting')
+    line_texture, = ax_main.plot(data['chainage'], data['texture'], label='Texture')
+    ax_main.set_xlabel('Chainage')
+    ax_main.set_ylabel('Value')
+    ax_main.set_title(f'Survey Data on {base} ({proj}-{device})')
+    ax_main.grid(True)
+
+    # Add cursor annotations
+    cursor = mplcursors.cursor([line_iri, line_rutting, line_texture], hover=True)
+    cursor.connect("add", lambda sel: sel.annotation.set_text(
+        f"Chainage: {sel.target[0]:.2f}"
+    ))
+
+    # Display statistics
+    max_iri = data['iri'].max()
+    min_iri = data['iri'].min()
+    mean_iri = data['iri'].mean()
+    max_rutting = data['rutting'].max()
+    min_rutting = data['rutting'].min()
+    mean_rutting = data['rutting'].mean()
+    max_texture = data['texture'].max()
+    min_texture = data['texture'].min()
+    mean_texture = data['texture'].mean()
+    
+    # Create a table for statistics on the second subplot
+    table_data = [
+        ["Parameter", "Max", "Min", "Mean"],
+        ["IRI", f"{max_iri:.2f}", f"{min_iri:.2f}", f"{mean_iri:.2f}"],
+        ["Rutting", f"{max_rutting:.2f}", f"{min_rutting:.2f}", f"{mean_rutting:.2f}"],
+        ["Texture", f"{max_texture:.2f}", f"{min_texture:.2f}", f"{mean_texture:.2f}"]
+    ]
+    ax_stats.axis('off')  # Turn off axis for the stats table
+    ax_stats.table(cellText=table_data, loc='center', cellLoc='center', colWidths=[0.2, 0.1, 0.1, 0.1])
+    
+    # Create checkboxes for each line
+    lines = [line_iri, line_rutting, line_texture]
+    labels = ['IRI', 'Rutting', 'Texture']
+    
+    # Create an Axes instance for checkboxes and position it
+    ax_checkbox = fig.add_axes([0.85, 0.8, 0.1, 0.1])  
+    checkboxes = CheckButtons(ax_checkbox, labels, [True] * len(lines))
+
+    # Modify the checkbox rectangles
+    for rect, line in zip(checkboxes.rectangles, lines):
+        rect.set_facecolor(line.get_color())  
+        rect.set_edgecolor(line.get_color())   
+        rect.set_linewidth(1.5)
+        rect.set_width(0.13)  
+        rect.set_height(0.15)
+
+    # Function to handle checkbox toggles
+    def toggle_line(label):
+        index = labels.index(label)
+        lines[index].set_visible(not lines[index].get_visible())
+        # Update y-axis limits based on visible data
+        visible_data = [line.get_ydata() for line in lines if line.get_visible()]
+        if visible_data:
+            min_y = min(min(data) for data in visible_data)
+            max_y = max(max(data) for data in visible_data)
+            ax_main.set_ylim(min_y, max_y)
+        plt.draw()
+    
+    checkboxes.on_clicked(toggle_line)
+    
+    # Adjust layout to prevent overlap
+    plt.tight_layout()
+    
+    # Show the plot
+    plt.show()
 
 def create_survey_local(conPG, s_id, device, proj, interval):
     try:
@@ -1299,7 +1475,7 @@ def create_survey_local(conPG, s_id, device, proj, interval):
                 null::int as road_id,
                 chainage_str,
                 chainage_end,
-                file_name, section_id::int
+                file_name
             from
                 (select -- generate เส้น survey ด้วย ST_MakeLine
                     min(chainage) as chainage_str, max(chainage) as chainage_end, link_id, section_id,
@@ -1355,9 +1531,9 @@ def create_survey_local(conPG, s_id, device, proj, interval):
         conPG.commit()
         print(" ✓ Create table 'data_suvey' successfully\n")
     except Exception as e:
-        print(f" \u26A0 An error occurred: {str(e)}")
+        print(f" \U0001F6AB An error occurred: {str(e)}")
 
-def create_survey_local_point(conPG, s_point_id):
+def create_survey_local_point(conPG, s_point_id, path_direc):
     try:
         print('Create table "survey_local_point"...')
         step8 = '''
@@ -1444,7 +1620,7 @@ def create_survey_local_point(conPG, s_point_id):
         conPG.commit()
         print(" ✓ Create table 'survey_local_point' successfully\n")
     except Exception as e:
-        print(f" \u26A0 An error occurred: {str(e)}")
+        print(f" \U0001F6AB An error occurred: {str(e)}")
 
 def create_survey_local_pave(conPG, gid, proj):
     try:
@@ -1551,7 +1727,7 @@ def create_survey_local_pave(conPG, gid, proj):
         print(" ✓ Create table 'survey_local_pave' successfully")
         print('____________________________________________________________________________________________________________________________________________\n')
     except Exception as e:
-        print(f" \u26A0 An error occurred: {str(e)}")
+        print(f" \U0001F6AB An error occurred: {str(e)}")
 
 def update_distrass(conPG):
     try:
@@ -1736,7 +1912,90 @@ def update_distrass(conPG):
         print(" ✓ Update table 'survey_local_pave' with 'icrack', 'ucrack', 'tranvertsal', 'rav', 'pothole', 'bleeding' successfully")
         print('____________________________________________________________________________________________________________________________________________\n')
     except Exception as e:
-        print(f" \u26A0 An error occurred: {str(e)}")
+        print(f" \U0001F6AB An error occurred: {str(e)}")
+
+def check_pic(path_direc):
+        
+            # ตรวจสอบรูปกล้องหน้า survey_local_point
+            local_point_pic = query_table("""
+                SELECT 
+                    image_name
+                FROM 
+                    public.survey_local_point 
+                """, conPG)
+            local_point_pic = pd.DataFrame(local_point_pic, columns=['image_name_1'])
+
+            # Get file names from the ROW directory and its subdirectories
+            path_Row = os.path.join(path_direc, "ROW")
+            file_names = []
+            for root, dirs, files in os.walk(path_Row):
+                for file in files:
+                    if file.endswith(".jpg"):
+                        file_names.append(file)
+
+            # Create a DataFrame with the file names
+            row_pic = pd.DataFrame({'image_name_2': file_names})
+
+            # Merge the two dataframes based on matching values
+            merged_df = pd.merge(local_point_pic, row_pic, left_on='image_name_1', right_on='image_name_2', how='left')
+            
+            # Filter the merged dataframe to only show rows where 'image_name_2' is NaN
+            nan_values = merged_df[merged_df['image_name_2'].isnull()]
+            nan_values.drop('image_name_2', axis=1, inplace=True)
+            nan_values.rename(columns={'image_name_1': 'image_name'}, inplace=True)
+
+            print(' 8.) ตรวจสอบไฟล์รูปกล้องหน้าว่ามีรูปหรือไม่ ?')
+            if nan_values.empty == True:
+                print('     \u2713 ตรวจสอบเรียบร้อย :: ไม่ต้องอัพโหลดไฟล์กล้องหน้าใหม่')
+                print('____________________________________________________________________________________________________________________________________________')
+            elif nan_values.empty == False:
+                print(f'     \U0001F6AB โปรดอัพโหลดไฟล์กล้องหน้าใหม่อีกครั้ง')#\n{nan_values}
+                for row in nan_values.values:
+                    print(f'        ❌ {"".join(row)}')
+                print('____________________________________________________________________________________________________________________________________________')
+                #return
+            print('')
+
+            # ตรวจสอบรูปกล้องหลัง survey_local_pave
+            local_point_pic = query_table("""
+                SELECT 
+                    filename
+                FROM 
+                    public.survey_local_pave
+                """, conPG)
+            local_point_pic = pd.DataFrame(local_point_pic, columns=['image_name_1'])
+
+            # Get file names from the ROW directory and its subdirectories
+            path_Pave = os.path.join(path_direc, "PAVE")
+            file_names = []
+            for root, dirs, files in os.walk(path_Pave):
+                for file in files:
+                    if file.endswith(".jpg"):
+                        file_names.append(file)
+
+            # Create a DataFrame with the file names
+            row_pic = pd.DataFrame({'image_name_2': file_names})
+
+            # Merge the two dataframes based on matching values
+            merged_df = pd.merge(local_point_pic, row_pic, left_on='image_name_1', right_on='image_name_2', how='left')
+            
+            # Filter the merged dataframe to only show rows where 'image_name_2' is NaN
+            nan_values = merged_df[merged_df['image_name_2'].isnull() & merged_df['image_name_1'].notnull()]
+
+            nan_values.drop('image_name_2', axis=1, inplace=True)
+            nan_values.rename(columns={'image_name_1': 'image_name'}, inplace=True)
+
+            print(' 9.) ตรวจสอบไฟล์รูปกล้องหลังว่ามีรูปหรือไม่ ?')
+            if nan_values.empty == True:
+                print('     \u2713 ตรวจสอบเรียบร้อย :: ไม่ต้องอัพโหลดไฟล์กล้องหลังใหม่')
+                print('____________________________________________________________________________________________________________________________________________')
+            elif nan_values.empty == False:
+                print(f'     \U0001F6AB โปรดอัพโหลดไฟล์กล้องหลังใหม่อีกครั้ง') #\n{nan_values}
+                for row in nan_values.values:
+                    print(f'        ❌ {"".join(row)}')
+                print('____________________________________________________________________________________________________________________________________________')
+                #return
+            print('')
 
 def dump_table_to_sql(conPG, table_name, path_out):
     try:
@@ -1753,7 +2012,7 @@ def dump_table_to_sql(conPG, table_name, path_out):
         print(f'✓ Successfully dumped {table_name} table to SQL file\n')
         
     except Exception as e:
-        print(f" \u26A0 An error occurred while dumping {table_name} table to SQL file: {str(e)}")
+        print(f" \U0001F6AB An error occurred while dumping {table_name} table to SQL file: {str(e)}")
 
 def main(date_survey, path_direc, path_out, user, password, host, port, database):
     # Define global variables
@@ -1763,16 +2022,8 @@ def main(date_survey, path_direc, path_out, user, password, host, port, database
     access_rav = None
 
     try:
-        print(f"Processing on '{device.upper()}' device, interval '{interval}' meters")
+        print(f"\nProcessing on '{proj}' project, '{device.upper()}' device, interval '{interval}' meters")
         # Establish connection
-        """conPG_S24 = psycopg2.connect(
-            host=host,
-            database=database_s24,
-            user=user,
-            password=password,
-            port=port
-        )"""
-
         conPG = psycopg2.connect(
             host=host,
             database=database,
@@ -1824,7 +2075,7 @@ def main(date_survey, path_direc, path_out, user, password, host, port, database
             pass
 
         if survey_local_point_var.get():
-            create_survey_local_point(conPG, s_point_id)
+            create_survey_local_point(conPG, s_point_id, path_direc)
         else:
             pass
 
@@ -1834,7 +2085,31 @@ def main(date_survey, path_direc, path_out, user, password, host, port, database
                 update_distrass(conPG)
         else:
             pass
-    
+
+        # Generate survey tables
+        if pic_var.get():
+            # Check if survey_local_var.get() is false and set it to true if needed
+            if not survey_local_var.get():
+                survey_local_var.set(True)
+                create_survey_local(conPG, s_id, device, proj, interval)
+            
+            # Check if survey_local_point_var.get() is false and set it to true if needed
+            if not survey_local_point_var.get():
+                survey_local_point_var.set(True)
+                create_survey_local_point(conPG, s_point_id, path_direc)
+            
+            # Check if survey_local_pave_var.get() is false and set it to true if needed
+            if not survey_local_pave_var.get():
+                survey_local_pave_var.set(True)
+                create_survey_local_pave(conPG, gid, proj)
+            
+            if device.upper() == "LCMS":
+                update_distrass(conPG)
+
+            check_pic(path_direc)
+        else:
+            pass
+
         # Dump tables to SQL
         if dump_sql_var.get():
             dump_table_to_sql(conPG, 'survey_local', path_out)
@@ -1849,19 +2124,19 @@ def main(date_survey, path_direc, path_out, user, password, host, port, database
         print("-------------------------------------------------- รายการเสร็จสิ้น อย่าลืมตรวจสอบใน QGIS !!!!! --------------------------------------------------")
 
     except Exception as e:
-        print(f" \u26A0 Error occurred in main function: {str(e)}")
+        print(f" \U0001F6AB Error occurred in main function: {str(e)}")
 
 def iterate_folders(path_file):
     try:
         # Check if the source folder exists
         if not os.path.exists(path_file):
-            print(f" \u26A0 Source directory '{path_file}' does not exist.")
+            print(f" \U0001F6AB Source directory '{path_file}' does not exist.")
             return
 
         # Check if there are any folders inside the source directory
         folders = [folder for folder in os.listdir(path_file) if os.path.isdir(os.path.join(path_file, folder))]
         if not folders:
-            print(f" \u26A0 No folders found inside '{path_file}'.")
+            print(f" \U0001F6AB No folders found inside '{path_file}'.")
             return
 
         # Iterate over the folders
@@ -1884,9 +2159,9 @@ def iterate_folders(path_file):
                 print("############################################################################################################################################\n\n")
 
     except FileNotFoundError:
-        print(f" \u26A0 Directory '{path_file}' not found.")
+        print(f" \U0001F6AB Directory '{path_file}' not found.")
     except Exception as e:
-        print(f" \u26A0 Error occurred while iterating folders: {str(e)}")
+        print(f" \U0001F6AB Error occurred while iterating folders: {str(e)}")
 
 def redirect_output_to_text_widget(widget):
     class TextRedirector:
@@ -1894,8 +2169,11 @@ def redirect_output_to_text_widget(widget):
             self.widget = widget
 
         def write(self, text):
-            if "\u26A0" in text:  # Check if the warning symbol is present
+            if "\U0001F6AB" in text or "❌" in text:  # Check if the warning symbol is present
                 # Insert the text with warning symbol in red color
+                self.widget.insert(tk.END, text, "red_alert")
+            elif "\u26A0" in text:  # Check if the warning symbol is present
+                # Insert the text with warning symbol in orange color
                 self.widget.insert(tk.END, text, "warning")
             else:
                 # Insert the text in green color
@@ -1906,7 +2184,8 @@ def redirect_output_to_text_widget(widget):
             self.widget.update_idletasks()
 
     # Configure tags for text colors
-    widget.tag_configure("warning", foreground="red")
+    widget.tag_configure("red_alert", foreground="red")
+    widget.tag_configure("warning", foreground="orange")
     widget.tag_configure("normal", foreground="green")
 
     sys.stdout = TextRedirector(widget)
@@ -1936,9 +2215,11 @@ if __name__ == "__main__":
         # Project name entry
         project_name_label = ttk.Label(root, text="Project Name:")
         project_name_label.grid(row=1, column=0, sticky="w")
-        project_name_entry = ttk.Entry(root, width=150)
-        project_name_entry.grid(row=1, column=1, padx=5, pady=5)
-        project_name_entry.bind("<Return>", set_project_name)  # Bind the Return key to set_project_name function
+        project_name_var = tk.StringVar()
+        project_name = ["S24", "S24_DRR"]
+        project_name_dropdown = ttk.Combobox(root, textvariable=project_name_var, values=project_name, width=147)
+        project_name_dropdown.grid(row=1, column=1, padx=5, pady=5)
+        project_name_dropdown.bind("<<ComboboxSelected>>", set_project_name) 
 
         # Interval dropdown
         interval_label = ttk.Label(root, text="Interval:")
@@ -1949,7 +2230,7 @@ if __name__ == "__main__":
 
         # Set default value to 25
         interval_dropdown.current(1)  # 25 is at index 1 in the values list
-        interval_dropdown.bind("<<ComboboxSelected>>", set_interval)  # Bind the selection event to set_interval function
+        interval_dropdown.bind("<<ComboboxSelected>>", set_interval) 
 
         # Devices dropdown
         device_label = ttk.Label(root, text="Devices:")
@@ -1980,6 +2261,14 @@ if __name__ == "__main__":
         dump_sql_checkbox = ttk.Checkbutton(root, text="Genearte SQL", variable=dump_sql_var )
         dump_sql_checkbox.grid(row=4, column=column_value, sticky="w", padx=padx_value+350, pady=5)
 
+        graph_var = tk.BooleanVar(value=False)  
+        graph_checkbox = ttk.Checkbutton(root, text="Plot Graph", variable=graph_var )
+        graph_checkbox.grid(row=5, column=column_value, sticky="w", padx=padx_value, pady=5)
+
+        pic_var = tk.BooleanVar(value=False)  
+        pic_checkbox = ttk.Checkbutton(root, text="Check Picture", variable=pic_var )
+        pic_checkbox.grid(row=5, column=column_value, sticky="w", padx=padx_value+100, pady=5)
+
         try:
             s_id = 1
             s_point_id = 1
@@ -2003,10 +2292,10 @@ if __name__ == "__main__":
                 )
                 
             except psycopg2.Error as e:
-                print(" \u26A0 Unable to connect to the database:", e)
+                print(" \U0001F6AB Unable to connect to the database:", e)
 
         except Exception as e:
-            print(f" \u26A0 Error occurred in __main__: {str(e)}")
+            print(f" \U0001F6AB Error occurred in __main__: {str(e)}")
 
         # Run button
         run_button = ttk.Button(root, text="Run", command=run_script)

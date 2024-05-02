@@ -4,3 +4,5 @@ sqlalchemy==1.4.46
 pyodbc==5.1.0
 psycopg2
 python-dotenv
+matplotlib
+mplcursors
