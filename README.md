@@ -1,43 +1,55 @@
-# Project Setup
+# Quick Start Guide
 
-## Setting up .env file
+This guide will help you set up and run the QC (Quality Control) tools.
 
-1. Create a `.env` file in the root directory of the project.
-2. Add the following environment variables to the `.env` file:
+## Installation
 
-    ```
-    HOST=localhost
-    PORT=5432
-    DATABASE=my_database
-    USER=my_username
-    PASSWORD=my_password
+1. Clone this repository to your local machine:
+
+    ```bash
+    git clone https://github.com/ISS-infra/qc-tool.git
     ```
 
-Replace the values with your own connection details.
+2. Navigate to the project directory:
 
-## Adding Database Functions
+    ```bash
+    cd <project_directory>
+    ```
 
-To add database functions to your PostgreSQL database using pgAdmin 4:
+3. Run the installation script to set up the environment and install dependencies:
 
-1. Open pgAdmin 4 and connect to your PostgreSQL database.
+    ```bash
+    https://www.python.org/ftp/python/3.9.13/python-3.9.13-amd64.exe
+    ```
 
-2. Navigate to the "Query Tool" to execute SQL queries.
+    ```bash
+    install.bat
+    ```
 
-3. Execute the SQL dump file `function_dump.sql` to add necessary functions to your database.
+## Configuration
 
-4. Execute the SQL random function file `function_random.sql` to add the random function to your database.
+1. After installation, you need to edit the `.env` file to configure your local database settings. Open the `.env` file in a text editor of your choice:
 
-## Adding PostGIS Extension
+    ```bash
+    .env
+    ```
 
-To add the PostGIS extension to your PostgreSQL database:
+2. Update the database settings with your local database information:
 
-1. Open pgAdmin 4 and connect to your PostgreSQL database.
+    ```
+    DATABASE_HOST=localhost
+    DATABASE_PORT=5432
+    DATABASE_NAME=your_database
+    DATABASE_USER=your_username
+    DATABASE_PASSWORD=your_password
+    ```
 
-2. Navigate to the "Extensions" section in your database.
+3. Save the changes and exit the text editor.
 
-3. Click on "Create" or "Add Extension".
+## Running QC Tools
 
-4. Select "PostGIS" from the list of available extensions and confirm the addition.
+Once the installation and configuration are complete, you can run the QC tools:
 
-This will enable the PostGIS extension for spatial database capabilities.
-
+    ```
+    python3.9 qc_tools.py
+    ```
