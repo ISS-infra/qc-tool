@@ -1,3 +1,6 @@
+######################## QC tool for TPL and LCMS ########################
+####################### Last updated on 03/05/2024 ########################
+
 import tkinter as tk
 from tkinter import filedialog
 from tkinter import ttk
@@ -1370,7 +1373,7 @@ def plot_and_show_statistics(data, base, proj, device):
     line_texture, = ax_main.plot(data['chainage'], data['texture'], label='Texture')
     ax_main.set_xlabel('Chainage')
     ax_main.set_ylabel('Value')
-    ax_main.set_title(f'Survey Data on {base} ({proj}-{device})')
+    ax_main.set_title(f'Survey Data on {base} ({proj.upper()}/{device.upper()})')
     ax_main.grid(True)
 
     # Add cursor annotations
@@ -1914,87 +1917,94 @@ def update_distrass(conPG):
         print(f" \U0001F6AB An error occurred: {str(e)}")
 
 def check_pic(path_direc):
-        
-            # ตรวจสอบรูปกล้องหน้า survey_local_point
-            local_point_pic = query_table("""
+        if device.upper() == 'TPL':
+            path_front = os.path.join(path_direc, "ROW")
+            path_back = os.path.join(path_direc, "PAVE")
+        elif device.upper() == 'LCMS':
+            path_front = os.path.join(path_direc, "Video")
+            path_back = os.path.join(path_direc, "Photo")
+
+        # ตรวจสอบรูปกล้องหน้า survey_local_point
+        local_point_pic = query_table("""
                 SELECT 
                     image_name
                 FROM 
                     public.survey_local_point 
                 """, conPG)
-            local_point_pic = pd.DataFrame(local_point_pic, columns=['image_name_1'])
+        local_point_pic = pd.DataFrame(local_point_pic, columns=['image_name_1'])
+        num_pic1 = local_point_pic.shape[0]
 
-            # Get file names from the ROW directory and its subdirectories
-            path_Row = os.path.join(path_direc, "ROW")
-            file_names = []
-            for root, dirs, files in os.walk(path_Row):
-                for file in files:
-                    if file.endswith(".jpg"):
-                        file_names.append(file)
+        file_names = []
+        for root, dirs, files in os.walk(path_front):
+            for file in files:
+                if file.endswith(".jpg"):
+                    file_names.append(file)
 
-            # Create a DataFrame with the file names
-            row_pic = pd.DataFrame({'image_name_2': file_names})
+        # Create a DataFrame with the file names
+        row_pic = pd.DataFrame({'image_name_2': file_names})
 
-            # Merge the two dataframes based on matching values
-            merged_df = pd.merge(local_point_pic, row_pic, left_on='image_name_1', right_on='image_name_2', how='left')
+        # Merge the two dataframes based on matching values
+        merged_df = pd.merge(local_point_pic, row_pic, left_on='image_name_1', right_on='image_name_2', how='left')
             
-            # Filter the merged dataframe to only show rows where 'image_name_2' is NaN
-            nan_values = merged_df[merged_df['image_name_2'].isnull()]
-            nan_values.drop('image_name_2', axis=1, inplace=True)
-            nan_values.rename(columns={'image_name_1': 'image_name'}, inplace=True)
+        # Filter the merged dataframe to only show rows where 'image_name_2' is NaN
+        nan_values = merged_df[merged_df['image_name_2'].isnull()]
+        nan_values.drop('image_name_2', axis=1, inplace=True)
+        nan_values.rename(columns={'image_name_1': 'image_name'}, inplace=True)
+        num_pic2 = nan_values.shape[0]
 
-            print(' 8.) ตรวจสอบไฟล์รูปกล้องหน้าว่ามีรูปหรือไม่ ?')
-            if nan_values.empty == True:
+        print(' 8.) ตรวจสอบไฟล์รูปกล้องหน้าว่ามีรูปหรือไม่ ?')
+        if nan_values.empty == True:
                 print('     \u2713 ตรวจสอบเรียบร้อย :: ไม่ต้องอัพโหลดไฟล์กล้องหน้าใหม่')
                 print('____________________________________________________________________________________________________________________________________________')
-            elif nan_values.empty == False:
-                print(f'     \U0001F6AB โปรดอัพโหลดไฟล์กล้องหน้าใหม่อีกครั้ง')#\n{nan_values}
+        elif nan_values.empty == False:
+                print(f'     \U0001F6AB โปรดอัพโหลดไฟล์กล้องหน้าใหม่อีกครั้ง (จำนวนรูปที่ขาด: {num_pic2} รูป, จากทั้งหมด {num_pic1} รูป)')#\n{nan_values}
                 for row in nan_values.values:
                     print(f'        ❌ {"".join(row)}')
                 print('____________________________________________________________________________________________________________________________________________')
                 #return
-            print('')
+        print('')
 
-            # ตรวจสอบรูปกล้องหลัง survey_local_pave
-            local_point_pic = query_table("""
-                SELECT 
-                    filename
-                FROM 
-                    public.survey_local_pave
-                """, conPG)
-            local_point_pic = pd.DataFrame(local_point_pic, columns=['image_name_1'])
+        # ตรวจสอบรูปกล้องหลัง survey_local_pave
+        local_point_pic = query_table("""
+            SELECT 
+                filename
+            FROM 
+                public.survey_local_pave
+            """, conPG)
+        local_point_pic = pd.DataFrame(local_point_pic, columns=['image_name_1'])
+        num_pic1 = local_point_pic.shape[0]
 
-            # Get file names from the ROW directory and its subdirectories
-            path_Pave = os.path.join(path_direc, "PAVE")
-            file_names = []
-            for root, dirs, files in os.walk(path_Pave):
-                for file in files:
-                    if file.endswith(".jpg"):
-                        file_names.append(file)
+        file_names = []
+        for root, dirs, files in os.walk(path_back):
+            for file in files:
+                if file.endswith(".jpg"):
+                    file_names.append(file)
 
-            # Create a DataFrame with the file names
-            row_pic = pd.DataFrame({'image_name_2': file_names})
+        # Create a DataFrame with the file names
+        row_pic = pd.DataFrame({'image_name_2': file_names})
 
-            # Merge the two dataframes based on matching values
-            merged_df = pd.merge(local_point_pic, row_pic, left_on='image_name_1', right_on='image_name_2', how='left')
-            
-            # Filter the merged dataframe to only show rows where 'image_name_2' is NaN
-            nan_values = merged_df[merged_df['image_name_2'].isnull() & merged_df['image_name_1'].notnull()]
+        # Merge the two dataframes based on matching values
+        merged_df = pd.merge(local_point_pic, row_pic, left_on='image_name_1', right_on='image_name_2', how='left')
+        
+        # Filter the merged dataframe to only show rows where 'image_name_2' is NaN
+        nan_values = merged_df[merged_df['image_name_2'].isnull() & merged_df['image_name_1'].notnull()]
 
-            nan_values.drop('image_name_2', axis=1, inplace=True)
-            nan_values.rename(columns={'image_name_1': 'image_name'}, inplace=True)
+        nan_values.drop('image_name_2', axis=1, inplace=True)
+        nan_values.rename(columns={'image_name_1': 'image_name'}, inplace=True)
+        num_pic2 = nan_values.shape[0]
 
-            print(' 9.) ตรวจสอบไฟล์รูปกล้องหลังว่ามีรูปหรือไม่ ?')
-            if nan_values.empty == True:
-                print('     \u2713 ตรวจสอบเรียบร้อย :: ไม่ต้องอัพโหลดไฟล์กล้องหลังใหม่')
-                print('____________________________________________________________________________________________________________________________________________')
-            elif nan_values.empty == False:
-                print(f'     \U0001F6AB โปรดอัพโหลดไฟล์กล้องหลังใหม่อีกครั้ง') #\n{nan_values}
-                for row in nan_values.values:
-                    print(f'        ❌ {"".join(row)}')
-                print('____________________________________________________________________________________________________________________________________________')
-                #return
-            print('')
+        print(' 9.) ตรวจสอบไฟล์รูปกล้องหลังว่ามีรูปหรือไม่ ?')
+        if nan_values.empty == True:
+            print('     \u2713 ตรวจสอบเรียบร้อย :: ไม่ต้องอัพโหลดไฟล์กล้องหลังใหม่')
+            print('____________________________________________________________________________________________________________________________________________')
+        elif nan_values.empty == False:
+            print(f'     \U0001F6AB โปรดอัพโหลดไฟล์กล้องหลังใหม่อีกครั้ง (จำนวนรูปที่ขาด: {num_pic2} รูป, จากทั้งหมด {num_pic1} รูป') #\n{nan_values}
+            for row in nan_values.values:
+                print(f'        ❌ {"".join(row)}')
+            print('____________________________________________________________________________________________________________________________________________')
+            #return
+        print('')
+        
 
 def dump_table_to_sql(conPG, table_name, path_out):
     try:
@@ -2014,6 +2024,7 @@ def dump_table_to_sql(conPG, table_name, path_out):
         print(f" \U0001F6AB An error occurred while dumping {table_name} table to SQL file: {str(e)}")
 
 def main(date_survey, path_direc, path_out, user, password, host, port, database):
+
     # Define global variables
     access_crack = None
     access_pothole = None
@@ -2021,6 +2032,7 @@ def main(date_survey, path_direc, path_out, user, password, host, port, database
     access_rav = None
 
     try:
+        print('--------------------------------------------------------- QC tool for TPL and LCMS ---------------------------------------------------------')
         print(f"\nProcessing on '{proj}' project, '{device.upper()}' device, interval '{interval}' meters")
         # Establish connection
         conPG = psycopg2.connect(
@@ -2034,8 +2046,6 @@ def main(date_survey, path_direc, path_out, user, password, host, port, database
         # Set up variables
         path_Data = os.path.join(path_direc, "Data")
         file_dir = Path(path_Data).glob('*.mdb')
-
-        #s_id, s_point_id, gid = get_max_survey_ids(conPG_S24)
 
         if device.upper() == "TPL":
             access_valuelaser, access_key, access_distress_pic = extract_survey_data_tpl(file_dir, path_out, date_survey)
@@ -2152,6 +2162,8 @@ def iterate_folders(path_file):
                     shutil.rmtree(path_out)
                     os.makedirs(path_out)
 
+                print("\n############################################################################################################################################")
+                
                 # Process survey data for each folder
                 main(date_survey, path_direc, path_out, user, password, host, port, database)
 
