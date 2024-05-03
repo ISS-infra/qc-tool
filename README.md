@@ -64,7 +64,7 @@ python --version
    
    - **OR** Download as a ZIP file:
    
-     ![Download ZIP](https://img.shields.io/badge/Download-ZIP-blue?style=flat-square&logo=github)
+     [![Download ZIP](https://img.shields.io/badge/Download-ZIP-blue?style=flat-square&logo=github)](https://github.com/ISS-infra/qc-tool/archive/refs/heads/main.zip)
    
 2. Navigate to the project directory:
 
