@@ -65,7 +65,14 @@ Replace `your_username`, `your_database`, and the file paths with your actual da
 
 ## Running QC Tools
 
-Once the installation and configuration are complete, you can run the QC tools by executing the following command in your terminal:
+Once the installation and configuration are complete, you can run the QC tools:
 
-```bash
-python3.9 qc_tools.py
+1. Navigate to the directory where the QC tools are installed.
+
+2. Run the QC tools executable by executing the following command in your terminal or command prompt:
+
+    ```bash
+    qc_tools.exe
+    ```
+
+This command will launch the QC tools interface, allowing you to perform quality control tasks on your data.
