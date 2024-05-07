@@ -110,6 +110,7 @@ Choose either the "Clone this repository" method via Git or "Download as a ZIP f
     ```bash
     psql -U your_username -d your_database -f path/to/function_dump.sql
     psql -U your_username -d your_database -f path/to/function_random.sql
+    psql -U your_username -d your_database -f path/to/v_infra.sql
     ```
 
 Replace `your_username`, `your_database`, and the file paths with your actual database credentials and paths to the SQL dump files.
