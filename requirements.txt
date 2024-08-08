@@ -1,8 +1,17 @@
-pandas==1.4.4
+# pandas==1.4.4
+numpy==1.23.5
+pandas==1.5.3
 pandasql==0.7.3
 sqlalchemy==1.4.46
 pyodbc==5.1.0
 psycopg2
+psycopg2-binary
 python-dotenv
 matplotlib
 mplcursors
+pyinstaller
+gspread
+oauth2client
+requests
+# pyarrow 
+# fastparquet
