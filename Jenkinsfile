@@ -1,17 +1,19 @@
 pipeline {
     agent any
 
-    tools {
-        nodejs 'NodeJS' // Use the name configured in the NodeJS plugin
-    }
-
     stages {
         stage('Install Dependencies') {
             steps {
                 script {
                     if (isUnix()) {
                         // Unix-based systems (Linux, macOS)
-                        sh 'npm install'
+                        sh '''
+                        export NVM_DIR="$HOME/.nvm"
+                        [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" # This loads nvm
+                        [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion" # This loads nvm bash_completion
+                        nvm install node
+                        npm install
+                        '''
                     } else {
                         // Windows systems
                         bat 'npm install'
