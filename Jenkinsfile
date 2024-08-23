@@ -4,26 +4,38 @@ pipeline {
     stages {
         stage('Checkout') {
             steps {
-                // Specify branch if needed, e.g., 'main' or 'master'
+                // Checkout the source code from the specified branch
                 git branch: 'main', url: 'https://github.com/ISS-infra/qc-tool.git'
             }
         }
 
-        stage('Build') {
+        stage('Install Dependencies') {
             steps {
-                // Run npm install
-                bat "npm install"
+                // Install npm dependencies
+                script {
+                    try {
+                        bat "npm install"
+                    } catch (Exception e) {
+                        error "Failed to install npm dependencies."
+                    }
+                }
             }
         }
 
-        stage('Scan') {
+        stage('SonarQube Scan') {
             steps {
-                // SonarQube environment setup
-                withSonarQubeEnv('sq1') {
-                    // Ensure sonar-scanner is available; if not, install
-                    bat 'npm install -g sonar-scanner'
-                    // Run the SonarQube analysis
-                    bat 'sonar-scanner -X -Dsonar.projectKey=mywebapp'
+                // Setup SonarQube environment and run the scanner
+                script {
+                    withSonarQubeEnv('sq1') {
+                        try {
+                            // Install sonar-scanner if not available
+                            bat 'npm install -g sonar-scanner'
+                            // Run SonarQube analysis
+                            bat 'sonar-scanner -X -Dsonar.projectKey=mywebapp'
+                        } catch (Exception e) {
+                            error "SonarQube scan failed."
+                        }
+                    }
                 }
             }
         }
